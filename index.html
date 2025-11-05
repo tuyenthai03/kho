@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Kho Nhôm Real-time</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>Bản đồ kho 100m²</h1>
+  <canvas id="map" width="800" height="600"></canvas>
+
+  <script>
+    const ctx = document.getElementById('map').getContext('2d');
+    const beacons = {};
+
+    function updateMap() {
+      fetch('data.json?' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+         377          data.forEach(d => {
+            beacons[d.minor] = {x: d.x, y: d.y, sku: "AC4CH" + d.minor};
+          });
+          drawMap();
+        });
+    }
+
+    function drawMap() {
+      ctx.clearRect(0, 0, 800, 600);
+      ctx.fillStyle = "#f0f0f0";
+      ctx.fillRect(0, 0, 800, 600);
+      Object.values(beacons).forEach(b => {
+        ctx.fillStyle = "red";
+        ctx.fillRect(b.x*8, b.y*6, 20, 20);
+        ctx.fillStyle = "black";
+        ctx.fillText(b.sku, b.x*8, b.y*6-5);
+      });
+    }
+
+    setInterval(updateMap, 1000);
+    updateMap();
+  </script>
+</body>
+</html>
