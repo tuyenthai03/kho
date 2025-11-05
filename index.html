@@ -1,42 +1,86 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8">
   <title>Kho Nhôm Real-time</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {font-family: Arial; text-align:center; background:#111; color:white;}
+    canvas {background:#222; border:3px solid #0f0; margin:10px;}
+    #info {font-size:20px; padding:10px;}
+  </style>
 </head>
 <body>
-  <h1>Bản đồ kho 100m²</h1>
-  <canvas id="map" width="800" height="600"></canvas>
+  <h1>Kho 40m × 80m</h1>
+  <div id="info">Đang tải 3 gateway…</div>
+  <canvas id="map" width="800" height="500"></canvas>
 
   <script>
-    const ctx = document.getElementById('map').getContext('2d');
+    const canvas = document.getElementById('map');
+    const ctx = canvas.getContext('2d');
+    const info = document.getElementById('info');
     const beacons = {};
 
-    function updateMap() {
-      fetch('data.json?' + Date.now())
-        .then(r => r.json())
-        .then(data => {
-         377          data.forEach(d => {
-            beacons[d.minor] = {x: d.x, y: d.y, sku: "AC4CH" + d.minor};
-          });
-          drawMap();
-        });
+    // Vị trí 3 gateway (mét)
+    const gw = {
+      GW1: {x:0,   y:0},
+      GW2: {x:40, y:0},
+      GW3: {x:20, y:50}
+    };
+
+    function trilaterate(gw1, gw2, gw3) {
+      // Tính vị trí X,Y từ 3 RSSI (đơn giản hóa)
+      let x = (gw1.rssi * gw1.x + gw2.rssi * gw2.x + gw3.rssi * gw3.x) / (gw1.rssi + gw2.rssi + gw3.rssi);
+      let y = (gw1.rssi * gw1.y + gw2.rssi * gw2.y + gw3.rssi * gw3.y) / (gw1.rssi + gw2.rssi + gw3.rssi);
+      return {x: x*10, y: y*10}; // scale lên pixel
     }
 
-    function drawMap() {
-      ctx.clearRect(0, 0, 800, 600);
-      ctx.fillStyle = "#f0f0f0";
-      ctx.fillRect(0, 0, 800, 600);
-      Object.values(beacons).forEach(b => {
-        ctx.fillStyle = "red";
-        ctx.fillRect(b.x*8, b.y*6, 20, 20);
-        ctx.fillStyle = "black";
-        ctx.fillText(b.sku, b.x*8, b.y*6-5);
+    function draw() {
+      ctx.clearRect(0,0,800,500);
+      // Vẽ kho
+      ctx.fillStyle = "#033";
+      ctx.fillRect(0,0,800,500);
+      // Vẽ 3 gateway
+      Object.keys(gw).forEach(id => {
+        ctx.fillStyle = "#0f0";
+        ctx.fillRect(gw[id].x*10-10, gw[id].y*10-10, 20, 20);
+        ctx.fillStyle = "white";
+        ctx.fillText(id, gw[id].x*10-15, gw[id].y*10-15);
+      });
+      // Vẽ beacon
+      Object.keys(beacons).forEach(minor => {
+        let b = beacons[minor];
+        ctx.fillStyle = "#f00";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 15, 0, 6.28);
+        ctx.fill();
+        ctx.fillStyle = "white";
+        ctx.fillText("Pallet "+minor, b.x-30, b.y-20);
       });
     }
 
-    setInterval(updateMap, 1000);
-    updateMap();
+    function update() {
+      fetch('https://kho.tentaikhoan.repl.co/data.json?' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          info.innerHTML = `Cập nhật: ${new Date().toLocaleTimeString()}<br>
+                           Phát hiện ${data.length} beacon`;
+          data.forEach(d => {
+            gw[d.gw].rssi = -d.rssi; // RSSI càng âm càng xa
+            if (!beacons[d.minor]) beacons[d.minor] = {x:400, y:250};
+          });
+          // Tính vị trí từng beacon
+          Object.keys(beacons).forEach(minor => {
+            let pos = trilaterate(gw.GW1, gw.GW2, gw.GW3);
+            beacons[minor].x = pos.x;
+            beacons[minor].y = pos.y;
+          });
+          draw();
+        });
+    }
+
+    setInterval(update, 1000);
+    update();
+    draw();
   </script>
 </body>
 </html>
